@@ -10,7 +10,7 @@ terraform {
     endpoint                    = "sfo3.digitaloceanspaces.com"
     bucket                      = "devjesus"
     key                         = "terraform.tfstate"
-    region                      = "us-east-1"  # Cambiado a una región válida de AWS
+    region                      = "us-east-1"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     force_path_style            = true
@@ -28,12 +28,6 @@ resource "digitalocean_droplet" "web_server" {
   size     = "s-1vcpu-1gb"
   ssh_keys = [var.ssh_key_id]
   tags     = ["web", "production", "nodejs"]
-
-  # Add creation timeout
-  timeouts {
-    create = "30m"
-    delete = "30m"
-  }
 
   connection {
     type        = "ssh"
@@ -58,7 +52,7 @@ resource "digitalocean_droplet" "web_server" {
   }
 
   provisioner "file" {
-    source      = "../backend"  # Asegúrate de que esta ruta es correcta
+    source      = "../backend"
     destination = "/var/www/app"
   }
 

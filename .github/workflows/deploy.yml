@@ -83,13 +83,14 @@ jobs:
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
-      # 11. Construir y publicar imagen Docker
+      # 11. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 12. Construir y publicar imagen Docker
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
@@ -101,7 +102,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
 
-      # 12. Desplegar la aplicación en el Droplet
+      # 13. Desplegar la aplicación en el Droplet
       - name: Deploy application
         run: |
           DROPLET_IP=$(terraform output -raw droplet_ip)
@@ -114,7 +115,7 @@ jobs:
               ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
           EOF
 
-      # 13. Notificaciones de éxito y fallo
+      # 14. Notificaciones de éxito y fallo
       - name: Notify on success
         if: success()
         run: |
@@ -125,7 +126,7 @@ jobs:
         run: |
           echo "Deployment failed!"
 
-      # 14. Limpieza de cache
+      # 15. Limpieza de cache
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
