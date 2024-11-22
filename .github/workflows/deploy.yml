@@ -62,7 +62,7 @@ jobs:
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=${{ secrets.SPACES_REGION }}"  # Asegúrate de definir SPACES_REGION
+            -backend-config="region=us-east-1"  # Región válida de AWS
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
