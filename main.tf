@@ -21,6 +21,13 @@ provider "digitalocean" {
   token = var.digitalocean_token
 }
 
+resource "digitalocean_project" "yisus" {
+  name        = "yisus"
+  description = "Proyecto para desplegar el servidor backend"
+  purpose     = "Web Application"
+  environment = "Production"
+}
+
 resource "digitalocean_droplet" "web_server" {
   image    = "ubuntu-20-04-x64"
   name     = "web-server"
