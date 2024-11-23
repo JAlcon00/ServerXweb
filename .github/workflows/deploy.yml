@@ -58,16 +58,18 @@ jobs:
 
       # 8. Inicializar Terraform
       - name: Terraform Init
+        env:
+          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -backend-config="region=us-east-1"  # Asegúrate de que la región sea correcta
-        env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
       # 9. Terraform Plan
       - name: Terraform Plan
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform plan \
             -var="digitalocean_token=${{ secrets.DIGITALOCEAN_TOKEN }}" \
@@ -106,13 +108,14 @@ jobs:
       - name: Deploy application
         run: |
           DROPLET_IP=$(terraform output -raw droplet_ip)
-          ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << 'EOF'
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
+          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest"
+          ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << EOF
+            docker pull ${DOCKER_IMAGE}
             docker stop backend || true
             docker rm backend || true
             docker run -d --name backend \
               -p 3000:3000 \
-              ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
+              ${DOCKER_IMAGE}
           EOF
 
       # 14. Notificaciones de éxito y fallo
