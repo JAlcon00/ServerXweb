@@ -32,7 +32,7 @@ resource "digitalocean_droplet" "web_server" {
   connection {
     type        = "ssh"
     user        = "root"
-    host        = digitalocean_droplet.web_server.ipv4_address
+    host        = self.ipv4_address
     private_key = file(var.private_key_path)
     timeout     = "5m"
   }
@@ -65,6 +65,13 @@ resource "digitalocean_droplet" "web_server" {
       "pm2 startup"
     ]
   }
+}
+
+resource "digitalocean_project_resources" "project_resources" {
+  project = var.project_id
+  resources = [
+    digitalocean_droplet.web_server.urn
+  ]
 }
 
 output "droplet_ip" {
