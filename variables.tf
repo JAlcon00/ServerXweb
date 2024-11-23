@@ -23,8 +23,3 @@ variable "private_key_path" {
     description = "Path to SSH private key"
     default     = "~/.ssh/serverxweb"
 }
-
-variable "project_id" {
-  type        = string
-  description = "ID del proyecto en DigitalOcean"
-}

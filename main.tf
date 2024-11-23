@@ -67,13 +67,6 @@ resource "digitalocean_droplet" "web_server" {
   }
 }
 
-resource "digitalocean_project_resources" "project_resources" {
-  project = var.project_id
-  resources = [
-    digitalocean_droplet.web_server.urn
-  ]
-}
-
 output "droplet_ip" {
   value = digitalocean_droplet.web_server.ipv4_address
 }
