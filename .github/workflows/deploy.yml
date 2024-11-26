@@ -89,7 +89,7 @@ jobs:
       - name: Terraform Apply
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
 
       # 11. Log in to Docker Hub
       - name: Log in to Docker Hub
