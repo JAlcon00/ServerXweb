@@ -1,24 +1,24 @@
-variable "digitalocean_token" {
+variable "DIGITALOCEAN_TOKEN" {
     type        = string
     description = "DigitalOcean API Token"
 }
 
-variable "spaces_access_key" {
+variable "SPACES_ACCESS_KEY" {
     type        = string
     description = "DigitalOcean Spaces Access Key"
 }
 
-variable "spaces_secret_key" {
+variable "SPACES_SECRET_KEY" {
     type        = string
     description = "DigitalOcean Spaces Secret Key"
 }
 
-variable "ssh_key_id" {
+variable "SSH_KEY_ID" {
     type        = string
     description = "SSH Key ID in DigitalOcean"
 }
 
-variable "private_key_path" {
+variable "PRIVATE_KEY_PATH" {
     type        = string
     description = "Path to SSH private key"
     default     = "~/.ssh/serverxweb"

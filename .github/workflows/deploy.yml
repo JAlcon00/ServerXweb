@@ -7,6 +7,9 @@ on:
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
+  TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+  TF_VAR_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY }}
+  TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
 
 jobs:
   terraform:
@@ -62,7 +65,7 @@ jobs:
       # 8. Inicializar Terraform
       - name: Terraform Init
         env:
-          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
@@ -75,11 +78,11 @@ jobs:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform plan \
-            -var="digitalocean_token=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-            -var="spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="ssh_key_id=${{ secrets.SSH_KEY_ID }}" \
-            -var="private_key_path=~/.ssh/serverxweb" \
+            -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
+            -var="SPACES_ACCESS_KEY=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="SPACES_SECRET_KEY=${{ secrets.SPACES_SECRET_KEY }}" \
+            -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
+            -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
             -out=tfplan
 
       # 10. Terraform Apply

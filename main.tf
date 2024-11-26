@@ -21,7 +21,7 @@ terraform {
 }
 
 provider "digitalocean" {
-  token = var.digitalocean_token
+  token = var.DIGITALOCEAN_TOKEN
 }
 
 resource "digitalocean_project" "yisus" {
@@ -36,7 +36,7 @@ resource "digitalocean_droplet" "web_server" {
   name        = "web-server"
   region      = "sfo3"
   size        = "s-1vcpu-1gb"
-  ssh_keys    = [var.ssh_key_id]
+  ssh_keys    = [var.SSH_KEY_ID]
   tags        = ["web", "production", "nodejs"]
   monitoring  = true
 
@@ -44,7 +44,7 @@ resource "digitalocean_droplet" "web_server" {
     type        = "ssh"
     user        = "root"
     host        = self.ipv4_address
-    private_key = file(var.private_key_path)
+    private_key = file(var.PRIVATE_KEY_PATH)
     timeout     = "5m"
   }
 
