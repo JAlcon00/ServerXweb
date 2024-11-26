@@ -47,24 +47,36 @@ resource "digitalocean_droplet" "web_server" {
       "#!/bin/bash",
       "set -e",
       
-      # Limpiar locks y esperar
-      "sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock* /var/cache/apt/archives/lock",
-      "while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 1; done",
+      # Función para esperar a que apt esté disponible
+      "wait_for_apt() {",
+      "  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do",
+      "    echo 'Esperando a que otras instancias de apt terminen...'",
+      "    sleep 10",
+      "  done",
+      "}",
       
-      # Actualizar sistema
-      "sudo apt-get update",
-      "sudo apt-get install -y ca-certificates curl gnupg",
+      # Limpiar locks si existen
+      "sudo killall apt apt-get 2>/dev/null || true",
+      "sudo rm -f /var/lib/apt/lists/lock",
+      "sudo rm -f /var/cache/apt/archives/lock",
+      "sudo rm -f /var/lib/dpkg/lock*",
       
-      # Instalar Node.js y npm
+      # Esperar y actualizar
+      "wait_for_apt",
+      "sudo apt-get clean",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get update -y",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y ca-certificates curl gnupg",
+      
+      # Instalar Node.js
       "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
-      "sudo apt-get update",
-      "sudo apt-get install -y nodejs",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y nodejs",
       
       # Verificar instalación
-      "echo 'Versión de Node.js:'",
-      "node --version",
-      "echo 'Versión de npm:'",
-      "npm --version",
+      "node --version || exit 1",
+      "npm --version || exit 1",
       
       # Instalar PM2
       "sudo npm install -g pm2",
