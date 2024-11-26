@@ -1,3 +1,7 @@
+provider "digitalocean" {
+  token = var.DIGITALOCEAN_TOKEN
+}
+
 terraform {
   required_providers {
     digitalocean = {
@@ -8,16 +12,16 @@ terraform {
 
   backend "s3" {
     endpoints = {
-      s3 = "https://nyc3.digitaloceanspaces.com"
+      s3 = "https://sfo3.digitaloceanspaces.com"
     }
     bucket                      = "devjesus2"
     key                         = "terraform.tfstate"
-    region                      = "nyc3"
+    skip_region_validation      = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
-    skip_region_validation      = true
     skip_requesting_account_id  = true
-    use_path_style              = true
+    skip_s3_checksum            = true
+    region                      = "us-east-1"
   }
 }
 
