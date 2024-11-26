@@ -75,15 +75,14 @@ resource "digitalocean_droplet" "web_server" {
       "sudo rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock*",
       "sudo dpkg --configure -a",
 
+      # Actualizar lista de paquetes
+      "sudo apt-get update",
+
       # Actualizar e instalar dependencias básicas
       "wait_for_apt",
       "sudo apt-get clean",
       "wait_for_apt",
-      "DEBIAN_FRONTEND=noninteractive sudo apt-get update -y || (echo 'Error en apt-get update' && exit 1)",
-      "wait_for_apt",
       "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y ca-certificates curl gnupg build-essential || (echo 'Error instalando dependencias básicas' && exit 1)",
-
-      # Verificar dependencias básicas
       "verify_package ca-certificates",
       "verify_package curl",
       "verify_package gnupg",
