@@ -79,8 +79,6 @@ jobs:
         run: |
           terraform plan \
             -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-            -var="SPACES_ACCESS_KEY=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="SPACES_SECRET_KEY=${{ secrets.SPACES_SECRET_KEY }}" \
             -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
             -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
             -out=tfplan
