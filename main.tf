@@ -10,7 +10,7 @@ terraform {
     endpoints = {
       s3 = "https://sfo3.digitaloceanspaces.com"
     }
-    bucket                      = "devjesus"
+    bucket                      = "devjesus2"
     key                         = "terraform.tfstate"
     region                      = "us-east-1"
     skip_credentials_validation = true
@@ -25,7 +25,7 @@ provider "digitalocean" {
 }
 
 resource "digitalocean_project" "yisus" {
-  name        = "yisus"
+  name        = "yisus-server"
   description = "Proyecto para desplegar el servidor backend"
   purpose     = "Web Application"
   environment = "Production"
