@@ -28,7 +28,7 @@ provider "digitalocean" {
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
   name        = "web-server-${formatdate("YYYYMMDDHHmmss", timestamp())}"
-  region      = "sfo3"  # Cambiado a SFO3 ya que NYC3 no está disponible
+  region      = "sfo3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [tonumber(var.SSH_KEY_ID)]
   tags        = ["web", "production", "nodejs"]
@@ -47,22 +47,36 @@ resource "digitalocean_droplet" "web_server" {
       "#!/bin/bash",
       "set -e",
       
-      # Limpiar y esperar procesos APT
-      "while ps aux | grep -i apt | grep -v grep; do sleep 5; done",
-      "sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock* /var/cache/apt/archives/lock",
+      # Función para esperar a que apt esté disponible
+      "wait_for_apt() {",
+      "  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do",
+      "    echo 'Esperando a que otras instancias de apt terminen...'",
+      "    sleep 10",
+      "  done",
+      "}",
       
-      # Actualizar sistema base
+      # Limpiar locks si existen
+      "sudo killall apt apt-get 2>/dev/null || true",
+      "sudo rm -f /var/lib/apt/lists/lock",
+      "sudo rm -f /var/cache/apt/archives/lock",
+      "sudo rm -f /var/lib/dpkg/lock*",
+      
+      # Esperar y actualizar
+      "wait_for_apt",
       "sudo apt-get clean",
-      "sudo apt-get update -y",
-      "sudo apt-get install -y ca-certificates curl gnupg",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get update -y",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y ca-certificates curl gnupg",
       
       # Instalar Node.js
       "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
-      "sudo apt-get install -y nodejs",
+      "wait_for_apt",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y nodejs",
       
       # Verificar instalación
-      "node --version",
-      "npm --version",
+      "node --version || exit 1",
+      "npm --version || exit 1",
       
       # Instalar PM2
       "sudo npm install -g pm2",
