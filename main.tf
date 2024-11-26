@@ -8,7 +8,7 @@ terraform {
 
   backend "s3" {
     endpoints = {
-      s3 = "https://sfo3.digitaloceanspaces.com"
+      s3 = "https://nyc3.digitaloceanspaces.com"
     }
     bucket                      = "devjesus2"
     key                         = "terraform.tfstate"
@@ -34,7 +34,7 @@ resource "digitalocean_project" "yisus" {
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
   name        = "web-server"
-  region      = "nyc3"
+  region      = "sfo3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [var.ssh_key_id]
   tags        = ["web", "production", "nodejs"]
