@@ -15,9 +15,10 @@ terraform {
     region                      = "us-east-1"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
-    skip_region_validation     = true
-    skip_requesting_account_id = true
-    use_path_style            = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    use_path_style             = true
+    force_path_style           = false
   }
 }
 
@@ -67,19 +68,18 @@ resource "digitalocean_droplet" "web_server" {
 
   # Copiar archivos de la aplicación
   provisioner "file" {
-    source      = "backend/"  # Asegúrate de que este directorio existe
+    source      = "src/"  # Asegúrate de que este directorio existe
     destination = "/var/www/app"
   }
 
   # Configurar y iniciar la aplicación
   provisioner "remote-exec" {
     inline = [
-      "cd /var/www/app",
-      "npm install",
-      "pm2 start server.ts --name backend || pm2 start server.js --name backend",
-      "pm2 save",
-      "pm2 startup",
-      "systemctl enable pm2-root"
+      "curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -",
+      "apt-get update",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
+      "npm install -g pm2",
+      "mkdir -p /var/www/app"
     ]
   }
 }
