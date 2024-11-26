@@ -73,7 +73,10 @@ jobs:
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -backend-config="region=us-east-1" \
             -backend-config="skip_credentials_validation=true" \
-            -backend-config="skip_metadata_api_check=true"
+            -backend-config="skip_metadata_api_check=true" \
+            -backend-config="skip_region_validation=true" \
+            -backend-config="skip_requesting_account_id=true" \
+            -backend-config="use_path_style=true"
 
       - name: Verify Variables
         run: |

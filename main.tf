@@ -82,7 +82,7 @@ resource "digitalocean_droplet" "web_server" {
       "DEBIAN_FRONTEND=noninteractive sudo apt-get update -y || (echo 'Error en apt-get update' && exit 1)",
       "wait_for_apt",
       "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y ca-certificates curl gnupg build-essential || (echo 'Error instalando dependencias básicas' && exit 1)",
-      
+
       # Verificar dependencias básicas
       "verify_package ca-certificates",
       "verify_package curl",
@@ -94,7 +94,7 @@ resource "digitalocean_droplet" "web_server" {
       "  echo 'Error configurando repositorio de Node.js'",
       "  exit 1",
       "fi",
-      
+
       "wait_for_apt",
       "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y nodejs || (echo 'Error instalando Node.js' && exit 1)",
       "verify_package nodejs",
@@ -116,7 +116,7 @@ resource "digitalocean_droplet" "web_server" {
       # Configurar directorio
       "sudo mkdir -p /var/www/app || (echo 'Error creando directorio de la aplicación' && exit 1)",
       "sudo chown -R root:root /var/www/app || (echo 'Error configurando permisos' && exit 1)",
-      
+
       "echo 'Instalación completada con éxito'"
     ]
   }
