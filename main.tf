@@ -10,14 +10,14 @@ terraform {
     endpoints = {
       s3 = "https://nyc3.digitaloceanspaces.com"
     }
-    bucket                      = "devjesus2"
-    key                         = "terraform.tfstate"
-    region                      = "us-east-1"
+    bucket                     = "devjesus2"
+    key                        = "terraform.tfstate"
+    region                     = "us-east-1"
     skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
-    use_path_style             = true
+    skip_metadata_api_check    = true
+    skip_region_validation     = true
+    skip_requesting_account_id = true
+    use_path_style            = true
   }
 }
 
@@ -27,7 +27,7 @@ provider "digitalocean" {
 
 # Generar timestamp único para nombres
 locals {
-  timestamp = formatdate("YYYYMMDD-HHmmss", timestamp())
+  timestamp = formatdate("YYYYMMDDHHmmss", timestamp())
 }
 
 resource "digitalocean_project" "yisus" {
@@ -57,28 +57,47 @@ resource "digitalocean_droplet" "web_server" {
   # Instalar dependencias
   provisioner "remote-exec" {
     inline = [
-      "while lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done",
-      "apt-get update",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm curl",
+      "#!/bin/bash",
+      "set -e", # Detener en caso de error
+      
+      # Esperar que apt esté disponible
+      "while ps aux | grep -i apt | grep -v grep; do sleep 1; done",
+      
+      # Actualizar sistema
+      "DEBIAN_FRONTEND=noninteractive apt-get update",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y curl",
+      
+      # Instalar Node.js desde NodeSource
+      "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
+      
+      # Verificar instalaciones
+      "node --version || exit 1",
+      "npm --version || exit 1",
+      
+      # Instalar PM2
       "npm install -g pm2",
+      
+      # Crear directorio de la aplicación
       "mkdir -p /var/www/app"
     ]
   }
 
   # Copiar archivos de la aplicación
   provisioner "file" {
-    source      = "src/"  # Asegúrate de que este directorio existe
+    source      = "src/"
     destination = "/var/www/app"
   }
 
   # Configurar y iniciar la aplicación
   provisioner "remote-exec" {
     inline = [
-      "curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -",
-      "apt-get update",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
-      "npm install -g pm2",
-      "mkdir -p /var/www/app"
+      "cd /var/www/app",
+      "npm install",
+      "pm2 start server.ts --name backend || pm2 start server.js --name backend",
+      "pm2 save",
+      "pm2 startup",
+      "systemctl enable pm2-root"
     ]
   }
 }
@@ -91,9 +110,10 @@ resource "digitalocean_project_resources" "project_resources" {
   ]
 }
 
+# Outputs
 output "droplet_ip" {
   value       = digitalocean_droplet.web_server.ipv4_address
-  description = "The public IP address of the web server"
+  description = "IP pública del servidor web"
 }
 
 output "project_id" {
@@ -104,4 +124,9 @@ output "project_id" {
 output "project_url" {
   value       = "https://cloud.digitalocean.com/projects/${digitalocean_project.yisus.id}"
   description = "URL del proyecto en DigitalOcean"
+}
+
+output "ssh_command" {
+  value       = "ssh root@${digitalocean_droplet.web_server.ipv4_address} -i ${var.PRIVATE_KEY_PATH}"
+  description = "Comando para conectarse via SSH al servidor"
 }
