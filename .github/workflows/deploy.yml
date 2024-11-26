@@ -80,8 +80,6 @@ jobs:
             -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
             -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
             -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
-            -var="SPACES_ACCESS_KEY=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="SPACES_SECRET_KEY=${{ secrets.SPACES_SECRET_KEY }}" \
             -out=tfplan
 
       # 10. Terraform Apply
