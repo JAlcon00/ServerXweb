@@ -4,12 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-  TF_VAR_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY }}
+  TF_VAR_PRIVATE_KEY_PATH: "~/.ssh/serverxweb"
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
+  TF_VAR_SPACES_ACCESS_KEY: ${{ secrets.SPACES_ACCESS_KEY }}
+  TF_VAR_SPACES_SECRET_KEY: ${{ secrets.SPACES_SECRET_KEY }}
 
 jobs:
   terraform:
@@ -19,7 +22,7 @@ jobs:
     steps:
       # 1. Checkout del repositorio
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       # 2. Verificar Docker
       - name: Check Docker
@@ -32,7 +35,7 @@ jobs:
 
       # 3. Cache para Docker Buildx
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
@@ -41,9 +44,9 @@ jobs:
 
       # 4. Configurar Docker Buildx
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
-      # 5. Instalar dependencias necesarias
+      # 5. Instalar dependencias
       - name: Install dependencies
         run: |
           sudo apt-get update || (sleep 10 && sudo apt-get update)
@@ -51,9 +54,9 @@ jobs:
 
       # 6. Configurar Terraform
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v1
+        uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.9.8  # Asegúrate de usar una versión compatible
+          terraform_version: "1.9.8"
 
       # 7. Configurar SSH key
       - name: Configure SSH key
@@ -64,12 +67,6 @@ jobs:
 
       # 8. Inicializar Terraform
       - name: Terraform Init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
-          TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
-          TF_VAR_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
@@ -78,22 +75,20 @@ jobs:
 
       # 9. Terraform Plan
       - name: Terraform Plan
-        env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform plan \
             -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
             -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
             -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
+            -var="SPACES_ACCESS_KEY=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var="SPACES_SECRET_KEY=${{ secrets.SPACES_SECRET_KEY }}" \
             -out=tfplan
 
       # 10. Terraform Apply
       - name: Terraform Apply
-        env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: terraform apply -auto-approve tfplan
 
-      # 11. Log in to Docker Hub
+      # 11. Login a Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -102,7 +97,7 @@ jobs:
 
       # 12. Construir y publicar imagen Docker
       - name: Build and push Docker image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
@@ -112,30 +107,31 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
 
-      # 13. Desplegar la aplicación en el Droplet
-      - name: Deploy application
+      # 13. Desplegar en Droplet
+      - name: Deploy to Droplet
         run: |
           DROPLET_IP=$(terraform output -raw droplet_ip)
-          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest"
-          ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << EOF
-            docker pull ${DOCKER_IMAGE}
+          echo "Desplegando en $DROPLET_IP"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/serverxweb root@$DROPLET_IP << 'EOF'
+            cd /var/www/app
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
             docker stop backend || true
             docker rm backend || true
-            docker run -d --name backend \
+            docker run -d \
+              --name backend \
               -p 3000:3000 \
-              ${DOCKER_IMAGE}
+              -e NODE_ENV=production \
+              ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
           EOF
 
-      # 14. Notificaciones de éxito y fallo
+      # 14. Notificaciones
       - name: Notify on success
         if: success()
-        run: |
-          echo "Deployment successful!"
+        run: echo "✅ Despliegue completado exitosamente"
 
       - name: Notify on failure
         if: failure()
-        run: |
-          echo "Deployment failed!"
+        run: echo "❌ El despliegue falló"
 
       # 15. Limpieza de cache
       - name: Move cache

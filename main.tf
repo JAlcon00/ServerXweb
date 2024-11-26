@@ -1,22 +1,23 @@
 terraform {
   required_providers {
     digitalocean = {
-      source = "digitalocean/digitalocean"
+      source  = "digitalocean/digitalocean"
       version = "~> 2.0"
     }
   }
+  
   backend "s3" {
-    endpoints {
+    endpoints = {
       s3 = "https://nyc3.digitaloceanspaces.com"
     }
-    bucket                      = "devjesus2"
-    key                         = "terraform.tfstate"
-    region                      = "us-east-1"
+    bucket                     = "devjesus2"
+    key                        = "terraform.tfstate"
+    region                     = "us-east-1"
     skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
-    force_path_style            = true
+    skip_metadata_api_check    = true
+    skip_region_validation     = true
+    skip_requesting_account_id = true
+    use_path_style            = true
   }
 }
 
@@ -25,7 +26,7 @@ provider "digitalocean" {
 }
 
 resource "digitalocean_project" "yisus" {
-  name        = "yisus-server-${formatdate("YYYYMMDD", timestamp())}" 
+  name        = "yisus-server-${formatdate("YYYYMMDD", timestamp())}"
   description = "Proyecto para desplegar el servidor backend"
   purpose     = "Web Application"
   environment = "Production"
@@ -33,7 +34,7 @@ resource "digitalocean_project" "yisus" {
 
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
-  name        = "web-server"
+  name        = "web-server-${formatdate("YYYYMMDD", timestamp())}"
   region      = "sfo3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [var.SSH_KEY_ID]
@@ -50,8 +51,9 @@ resource "digitalocean_droplet" "web_server" {
 
   provisioner "remote-exec" {
     inline = [
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs || exit 1",
-      "npm install pm2 -g",
+      "apt-get update",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm",
+      "npm install -g pm2",
       "mkdir -p /var/www/app"
     ]
   }
@@ -73,5 +75,11 @@ resource "digitalocean_droplet" "web_server" {
 }
 
 output "droplet_ip" {
-  value = digitalocean_droplet.web_server.ipv4_address
+  value       = digitalocean_droplet.web_server.ipv4_address
+  description = "The public IP address of the web server"
+}
+
+output "project_id" {
+  value       = digitalocean_project.yisus.id
+  description = "ID del proyecto creado"
 }
