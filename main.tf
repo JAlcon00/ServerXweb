@@ -5,7 +5,7 @@ terraform {
       version = "~> 2.0"
     }
   }
-  
+
   backend "s3" {
     endpoints = {
       s3 = "https://nyc3.digitaloceanspaces.com"
@@ -17,7 +17,7 @@ terraform {
     skip_metadata_api_check    = true
     skip_region_validation     = true
     skip_requesting_account_id = true
-    use_path_style            = true
+    use_path_style             = true
   }
 }
 
@@ -40,7 +40,7 @@ resource "digitalocean_project" "yisus" {
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
   name        = "web-server-${local.timestamp}"
-  region      = "sfo3"
+  region      = "nyc3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [tonumber(var.SSH_KEY_ID)]
   tags        = ["web", "production", "nodejs"]
@@ -54,53 +54,50 @@ resource "digitalocean_droplet" "web_server" {
     timeout     = "5m"
   }
 
-  # Instalar dependencias
   provisioner "remote-exec" {
-  inline = [
-    "#!/bin/bash",
-    "set -e",
-    "while ps aux | grep -i apt | grep -v grep; do sleep 1; done",
-    
-    # Actualizar sistema
-    "DEBIAN_FRONTEND=noninteractive apt-get update",
-    "DEBIAN_FRONTEND=noninteractive apt-get install -y command-not-found",
-    
-    # Instalar Node.js desde NodeSource
-    "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
-    "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
-    
-    # Verificar instalaciones
-    "node --version || exit 1",
-    "npm --version || exit 1",
-    
-    # Instalar PM2
-    "npm install -g pm2",
-    
-    # Crear directorio de la aplicación
-    "mkdir -p /var/www/app"
-  ]
-}
+    inline = [
+      "#!/bin/bash",
+      "set -e",
+      # Esperar a que se libere el bloqueo de APT
+      "while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done",
+      
+      # Actualizar sistema e instalar dependencias
+      "DEBIAN_FRONTEND=noninteractive apt-get update",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y command-not-found curl",
+      
+      # Instalar Node.js desde NodeSource
+      "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
+      
+      # Verificar instalaciones
+      "node --version",
+      "npm --version",
+      
+      # Instalar PM2
+      "npm install -g pm2",
+      
+      # Crear directorio de la aplicación
+      "mkdir -p /var/www/app"
+    ]
+  }
 
-  # Copiar archivos de la aplicación
   provisioner "file" {
     source      = "src/"
     destination = "/var/www/app"
   }
 
-  # Configurar y iniciar la aplicación
   provisioner "remote-exec" {
     inline = [
       "cd /var/www/app",
       "npm install",
       "pm2 start server.ts --name backend || pm2 start server.js --name backend",
       "pm2 save",
-      "pm2 startup",
+      "pm2 startup systemd -u root --hp /root",
       "systemctl enable pm2-root"
     ]
   }
 }
 
-# Asignar recursos al proyecto
 resource "digitalocean_project_resources" "project_resources" {
   project = digitalocean_project.yisus.id
   resources = [

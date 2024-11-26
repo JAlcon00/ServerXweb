@@ -71,7 +71,7 @@ jobs:
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=us-east-1" \
+            -backend-config="region=nyc3" \
             -backend-config="skip_credentials_validation=true" \
             -backend-config="skip_metadata_api_check=true"
 
