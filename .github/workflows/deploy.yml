@@ -1,4 +1,4 @@
-name: Deploy Infrastructure
+name: Terraform Init
 
 on:
   workflow_dispatch:
@@ -25,7 +25,6 @@ jobs:
       - name: Check Docker
         run: |
           if ! command -v docker &> /dev/null; then
-            echo "Docker no está instalado"
             exit 1
           fi
           docker --version
@@ -65,29 +64,26 @@ jobs:
       # 8. Inicializar Terraform
       - name: Terraform Init
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
           TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform init \
+            -backend=true \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=us-east-1"  # Asegúrate de que la región sea correcta
+            -force-copy
 
       # 9. Terraform Plan
       - name: Terraform Plan
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
-          terraform plan \
-            -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-            -var="SPACES_ACCESS_KEY=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var="SPACES_SECRET_KEY=${{ secrets.SPACES_SECRET_KEY }}" \
-            -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
-            -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
-            -out=tfplan
+          terraform plan
 
       # 10. Terraform Apply
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
@@ -104,39 +100,23 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/backstore:${{ github.sha }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/myapp:latest
 
       # 13. Desplegar la aplicación en el Droplet
       - name: Deploy application
         run: |
-          DROPLET_IP=$(terraform output -raw droplet_ip)
-          DOCKER_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest"
-          ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << EOF
-            docker pull ${DOCKER_IMAGE}
-            docker stop backend || true
-            docker rm backend || true
-            docker run -d --name backend \
-              -p 3000:3000 \
-              ${DOCKER_IMAGE}
-          EOF
+          ssh -i ~/.ssh/serverxweb root@$(terraform output -raw droplet_ip) 'cd /var/www/app && git pull && pm2 restart all'
 
       # 14. Notificaciones de éxito y fallo
       - name: Notify on success
         if: success()
-        run: |
-          echo "Deployment successful!"
+        run: echo "Deployment successful!"
 
       - name: Notify on failure
         if: failure()
-        run: |
-          echo "Deployment failed!"
+        run: echo "Deployment failed."
 
       # 15. Limpieza de cache
       - name: Move cache
         run: |
-          rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
