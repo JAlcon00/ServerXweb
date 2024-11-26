@@ -65,12 +65,16 @@ jobs:
       # 8. Inicializar Terraform
       - name: Terraform Init
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
           TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
+          TF_VAR_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=us-east-1"  # Asegúrate de que la región sea correcta
+            -backend-config="region=us-east-1"
 
       # 9. Terraform Plan
       - name: Terraform Plan
@@ -87,7 +91,7 @@ jobs:
       - name: Terraform Apply
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
 
       # 11. Log in to Docker Hub
       - name: Log in to Docker Hub

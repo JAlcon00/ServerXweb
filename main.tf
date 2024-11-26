@@ -6,13 +6,16 @@ terraform {
     }
   }
   backend "s3" {
-    endpoint                      = "https://nyc3.digitaloceanspaces.com"
-    bucket                        = "devjesus2"
-    key                           = "terraform.tfstate"
-    region                        = "us-east-1"
+    endpoints {
+      s3 = "https://nyc3.digitaloceanspaces.com"
+    }
+    bucket                      = "devjesus2"
+    key                         = "terraform.tfstate"
+    region                      = "us-east-1"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
+    skip_requesting_account_id  = true
     force_path_style            = true
   }
 }
@@ -47,12 +50,6 @@ resource "digitalocean_droplet" "web_server" {
 
   provisioner "remote-exec" {
     inline = [
-      "set -e",
-      "apt-get update || (sleep 30 && apt-get update)",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx",
-      "systemctl start nginx || systemctl status nginx",
-      "systemctl enable nginx",
-      "curl -fsSL https://deb.nodesource.com/setup_16.x | bash - || exit 1",
       "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs || exit 1",
       "npm install pm2 -g",
       "mkdir -p /var/www/app"
