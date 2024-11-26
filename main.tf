@@ -12,7 +12,7 @@ terraform {
     }
     bucket                     = "devjesus2"
     key                        = "terraform.tfstate"
-    region                     = "us-east-1"
+    region                     = "nyc3"
     skip_credentials_validation = true
     skip_metadata_api_check    = true
     skip_region_validation     = true
@@ -56,32 +56,30 @@ resource "digitalocean_droplet" "web_server" {
 
   # Instalar dependencias
   provisioner "remote-exec" {
-    inline = [
-      "#!/bin/bash",
-      "set -e", # Detener en caso de error
-      
-      # Esperar que apt esté disponible
-      "while ps aux | grep -i apt | grep -v grep; do sleep 1; done",
-      
-      # Actualizar sistema
-      "DEBIAN_FRONTEND=noninteractive apt-get update",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y curl",
-      
-      # Instalar Node.js desde NodeSource
-      "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
-      
-      # Verificar instalaciones
-      "node --version || exit 1",
-      "npm --version || exit 1",
-      
-      # Instalar PM2
-      "npm install -g pm2",
-      
-      # Crear directorio de la aplicación
-      "mkdir -p /var/www/app"
-    ]
-  }
+  inline = [
+    "#!/bin/bash",
+    "set -e",
+    "while ps aux | grep -i apt | grep -v grep; do sleep 1; done",
+    
+    # Actualizar sistema
+    "DEBIAN_FRONTEND=noninteractive apt-get update",
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y command-not-found",
+    
+    # Instalar Node.js desde NodeSource
+    "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
+    
+    # Verificar instalaciones
+    "node --version || exit 1",
+    "npm --version || exit 1",
+    
+    # Instalar PM2
+    "npm install -g pm2",
+    
+    # Crear directorio de la aplicación
+    "mkdir -p /var/www/app"
+  ]
+}
 
   # Copiar archivos de la aplicación
   provisioner "file" {
