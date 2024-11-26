@@ -3,16 +3,6 @@ variable "DIGITALOCEAN_TOKEN" {
     description = "DigitalOcean API Token"
 }
 
-variable "SPACES_ACCESS_KEY" {
-    type        = string
-    description = "DigitalOcean Spaces Access Key"
-}
-
-variable "SPACES_SECRET_KEY" {
-    type        = string
-    description = "DigitalOcean Spaces Secret Key"
-}
-
 variable "SSH_KEY_ID" {
     type        = string
     description = "SSH Key ID in DigitalOcean"
