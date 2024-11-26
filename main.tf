@@ -12,7 +12,7 @@ terraform {
     }
     bucket                     = "devjesus2"
     key                        = "terraform.tfstate"
-    region                     = "nyc3"
+    region                     = "us-east-1"  # Cambiado a us-east-1 para Spaces
     skip_credentials_validation = true
     skip_metadata_api_check    = true
     skip_region_validation     = true
@@ -28,7 +28,7 @@ provider "digitalocean" {
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
   name        = "web-server-${formatdate("YYYYMMDDHHmmss", timestamp())}"
-  region      = "nyc3"
+  region      = "sfo3"  # Cambiado a SFO3 ya que NYC3 no está disponible
   size        = "s-1vcpu-1gb"
   ssh_keys    = [tonumber(var.SSH_KEY_ID)]
   tags        = ["web", "production", "nodejs"]
@@ -46,20 +46,18 @@ resource "digitalocean_droplet" "web_server" {
     inline = [
       "#!/bin/bash",
       "set -e",
-
+      
       # Limpiar y esperar procesos APT
       "while ps aux | grep -i apt | grep -v grep; do sleep 5; done",
       "sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock* /var/cache/apt/archives/lock",
       
       # Actualizar sistema base
-      "sudo apt-get update -y || true",
+      "sudo apt-get clean",
+      "sudo apt-get update -y",
       "sudo apt-get install -y ca-certificates curl gnupg",
       
       # Instalar Node.js
-      "mkdir -p /etc/apt/keyrings",
-      "curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg",
-      "echo 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main' | sudo tee /etc/apt/sources.list.d/nodesource.list",
-      "sudo apt-get update -y",
+      "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
       "sudo apt-get install -y nodejs",
       
       # Verificar instalación
