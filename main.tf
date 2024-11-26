@@ -34,7 +34,7 @@ resource "digitalocean_project" "yisus" {
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
   name        = "web-server"
-  region      = "sfo3"
+  region      = "nyc3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [var.ssh_key_id]
   tags        = ["web", "production", "nodejs"]
