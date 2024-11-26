@@ -14,7 +14,7 @@ variable "SSH_KEY_ID" {
   description = "ID de la llave SSH en DigitalOcean"
 
   validation {
-    condition     = can(regex("^[0-9]+$", var.SSH_KEY_ID))
+    condition     = can(tonumber(var.SSH_KEY_ID))
     error_message = "El ID de la llave SSH debe ser un número"
   }
 }
