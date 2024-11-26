@@ -71,21 +71,40 @@ jobs:
           terraform init \
             -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
             -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=us-east-1"
+            -backend-config="region=us-east-1" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_metadata_api_check=true"
+      
+      - name: Verify Variables
+        run: |
+          echo "Verificando SSH_KEY_ID..."
+          if ! [[ ${{ secrets.SSH_KEY_ID }} =~ ^[0-9]+$ ]]; then
+            echo "Error: SSH_KEY_ID debe ser un número"
+            exit 1
+          fi
+
 
       # 9. Terraform Plan
       - name: Terraform Plan
         run: |
           terraform plan \
             -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-            -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
+            -var="SSH_KEY_ID=$(echo ${{ secrets.SSH_KEY_ID }} | tr -d '"')" \
             -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
             -out=tfplan
 
       # 10. Terraform Apply
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-
+        run: |
+          terraform apply -auto-approve tfplan || {
+            if [ -f "errored.tfstate" ]; then
+              echo "Intentando recuperar el estado..."
+              terraform state push errored.tfstate
+              terraform apply -auto-approve
+            else
+              exit 1
+            fi
+          }
       # 11. Login a Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
