@@ -17,7 +17,8 @@ terraform {
     skip_metadata_api_check    = true
     skip_region_validation     = true
     skip_requesting_account_id = true
-    use_path_style             = true
+    use_path_style            = true
+    acl                       = "private"
   }
 }
 
@@ -25,21 +26,9 @@ provider "digitalocean" {
   token = var.DIGITALOCEAN_TOKEN
 }
 
-# Generar timestamp único para nombres
-locals {
-  timestamp = formatdate("YYYYMMDDHHmmss", timestamp())
-}
-
-resource "digitalocean_project" "yisus" {
-  name        = "yisus-server-${local.timestamp}"
-  description = "Proyecto para desplegar el servidor backend"
-  purpose     = "Web Application"
-  environment = "Production"
-}
-
 resource "digitalocean_droplet" "web_server" {
   image       = "ubuntu-20-04-x64"
-  name        = "web-server-${local.timestamp}"
+  name        = "web-server-${formatdate("YYYYMMDDHHmmss", timestamp())}"
   region      = "nyc3"
   size        = "s-1vcpu-1gb"
   ssh_keys    = [tonumber(var.SSH_KEY_ID)]
@@ -58,70 +47,55 @@ resource "digitalocean_droplet" "web_server" {
     inline = [
       "#!/bin/bash",
       "set -e",
-      # Esperar a que se libere el bloqueo de APT
-      "while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done",
       
-      # Actualizar sistema e instalar dependencias
-      "DEBIAN_FRONTEND=noninteractive apt-get update",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y command-not-found curl",
+      # Esperar cualquier proceso apt existente
+      "while ps aux | grep -i apt | grep -v grep; do sleep 5; done",
       
-      # Instalar Node.js desde NodeSource
-      "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs",
+      # Remover locks antiguos si existen
+      "sudo rm -f /var/lib/apt/lists/lock",
+      "sudo rm -f /var/lib/dpkg/lock*",
+      "sudo rm -f /var/cache/apt/archives/lock",
+      
+      # Actualizar e instalar dependencias básicas
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get clean",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get update",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y software-properties-common curl apt-transport-https ca-certificates",
+      
+      # Instalar Node.js
+      "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y nodejs",
       
       # Verificar instalaciones
       "node --version",
       "npm --version",
       
-      # Instalar PM2
-      "npm install -g pm2",
+      # Instalar PM2 globalmente
+      "sudo npm install -g pm2",
       
       # Crear directorio de la aplicación
-      "mkdir -p /var/www/app"
-    ]
-  }
-
-  provisioner "file" {
-    source      = "src/"
-    destination = "/var/www/app"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "cd /var/www/app",
-      "npm install",
-      "pm2 start server.ts --name backend || pm2 start server.js --name backend",
-      "pm2 save",
-      "pm2 startup systemd -u root --hp /root",
-      "systemctl enable pm2-root"
+      "sudo mkdir -p /var/www/app",
+      "sudo chown -R root:root /var/www/app"
     ]
   }
 }
 
-resource "digitalocean_project_resources" "project_resources" {
-  project = digitalocean_project.yisus.id
-  resources = [
-    digitalocean_droplet.web_server.urn
-  ]
-}
-
-# Outputs
+# Outputs actualizados con más información
 output "droplet_ip" {
   value       = digitalocean_droplet.web_server.ipv4_address
   description = "IP pública del servidor web"
 }
 
-output "project_id" {
-  value       = digitalocean_project.yisus.id
-  description = "ID del proyecto creado"
-}
-
-output "project_url" {
-  value       = "https://cloud.digitalocean.com/projects/${digitalocean_project.yisus.id}"
-  description = "URL del proyecto en DigitalOcean"
+output "droplet_status" {
+  value       = digitalocean_droplet.web_server.status
+  description = "Estado actual del Droplet"
 }
 
 output "ssh_command" {
-  value       = "ssh root@${digitalocean_droplet.web_server.ipv4_address} -i ${var.PRIVATE_KEY_PATH}"
-  description = "Comando para conectarse via SSH al servidor"
+  value       = "ssh -i ${var.PRIVATE_KEY_PATH} root@${digitalocean_droplet.web_server.ipv4_address}"
+  description = "Comando para conectarse via SSH"
+}
+
+output "node_install_log" {
+  value       = "Verifica los logs en: /var/log/cloud-init-output.log"
+  description = "Ubicación de logs de instalación"
 }
