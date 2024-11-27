@@ -65,19 +65,19 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/serverxweb
           chmod 600 ~/.ssh/serverxweb
 
-      # 8. Inicializar Terraform
+      # 8. Inicializar Terraform    
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-            -backend-config="region=us-east-1" \
-            -backend-config="skip_credentials_validation=true" \
-            -backend-config="skip_metadata_api_check=true" \
-            -backend-config="skip_region_validation=true" \
-            -backend-config="skip_requesting_account_id=true" \
-            -backend-config="use_path_style=true"
-
+          -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+          -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
+          -backend-config="region=us-east-1" \
+          -backend-config="skip_credentials_validation=true" \
+          -backend-config="skip_metadata_api_check=true" \
+          -backend-config="skip_region_validation=true" \
+          -backend-config="skip_requesting_account_id=true" \
+          -backend-config="use_path_style=true"
+        
       - name: Verify Variables
         run: |
             echo "Verificando SSH_KEY_ID..."
