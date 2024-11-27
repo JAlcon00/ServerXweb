@@ -88,7 +88,7 @@ resource "digitalocean_droplet" "web_server" {
       "verify_package gnupg",
       "verify_package build-essential",
 
-      # Instalar Node.js
+      # Instalar Node.js desde NodeSource
       "if ! curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -; then",
       "  echo 'Error configurando repositorio de Node.js'",
       "  exit 1",
