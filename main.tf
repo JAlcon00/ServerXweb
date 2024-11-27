@@ -75,8 +75,12 @@ resource "digitalocean_droplet" "web_server" {
       "sudo rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock*",
       "sudo dpkg --configure -a",
 
+      # Habilitar repositorios universe y multiverse
+      "sudo add-apt-repository universe",
+      "sudo add-apt-repository multiverse",
+
       # Actualizar lista de paquetes
-      "sudo apt-get update",
+      "sudo apt-get update || (echo 'Error al actualizar la lista de paquetes' && exit 1)",
 
       # Actualizar e instalar dependencias básicas
       "wait_for_apt",
@@ -95,7 +99,7 @@ resource "digitalocean_droplet" "web_server" {
       "fi",
 
       "wait_for_apt",
-      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y nodejs || (echo 'Error instalando Node.js' && exit 1)",
+      "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y ca-certificates curl gnupg build-essential || (echo 'Error instalando dependencias básicas' && exit 1)",
       "verify_package nodejs",
 
       # Verificar versiones
