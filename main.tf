@@ -1,3 +1,10 @@
+//1.- Levanto la maquina virtual sin nada
+//2.- Instalo nodejs
+//4.- Guardo los comandos en un archivo SH
+//5.- Ejecuto el archivo SH como user data
+//6.- Descomento remote exect
+//7.- Instalo nodejs
+
 terraform {
   required_providers {
     digitalocean = {
@@ -33,6 +40,7 @@ resource "digitalocean_droplet" "web_server" {
   ssh_keys   = [tonumber(var.SSH_KEY_ID)]
   tags       = ["web", "production", "nodejs"]
   monitoring = true
+  //user_data = file(("node-install.sh"))
 
   connection {
     type        = "ssh"
@@ -41,6 +49,8 @@ resource "digitalocean_droplet" "web_server" {
     private_key = file(var.PRIVATE_KEY_PATH)
     timeout     = "5m"
   }
+
+  /*
 
   provisioner "remote-exec" {
   inline = [
@@ -124,6 +134,7 @@ resource "digitalocean_droplet" "web_server" {
     "echo 'Instalación completada con éxito'"
   ]
 }
+*/
 }
 
 output "droplet_ip" {
