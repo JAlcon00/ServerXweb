@@ -3,7 +3,7 @@
 //4.- Guardo los comandos en un archivo SH
 //5.- Ejecuto el archivo SH como user data
 //6.- Descomento remote exect
-//7.- Instalo nodejs
+//xd
 
 terraform {
   required_providers {
