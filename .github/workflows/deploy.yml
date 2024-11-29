@@ -108,23 +108,19 @@ jobs:
 
       
       # 10. Terraform Apply
-      #- name: Terraform Apply
-      #  run: |
-      #    terraform apply -auto-approve tfplan || {
-      #      if [ -f "errored.tfstate" ]; then
-      #        echo "Intentando recuperar el estado..."
-      #        terraform state push errored.tfstate
-      #        terraform apply -auto-approve
-      #      else
-      #        exit 1
-      #      fi
-      #    }
-
-      # 10. Terraform Apply
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve tfplan || {
+            if [ -f "errored.tfstate" ]; then
+              echo "Intentando recuperar el estado..."
+              terraform state push errored.tfstate
+              terraform apply -auto-approve
+            else
+              exit 1
+            fi
+          }
 
-
+      
       # 11. Login a Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
