@@ -34,7 +34,7 @@ terraform {
   }
 }
 
-resource "digitalocean_project" "yisus-project" {
+resource "digitalocean_project" "yisus-project2" {
   name        = "yisus-project2"
   description = "yisus-project2"
   resources   = [digitalocean_droplet.yisus-project-droplet.urn]

@@ -1,5 +1,5 @@
 name: Deploy Infrastructure
-#EFE
+
 on:
   workflow_dispatch:
   push:
@@ -9,31 +9,25 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-  TF_VAR_PRIVATE_KEY_PATH: "~/.ssh/serverxweb"
+  TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
-  TF_VAR_SPACES_ACCESS_KEY: ${{ secrets.SPACES_ACCESS_KEY }}
-  TF_VAR_SPACES_SECRET_KEY: ${{ secrets.SPACES_SECRET_KEY }}
+  DOCKER_BUILDKIT: 1
 
 jobs:
   terraform:
-    name: Terraform Deploy
+    name: Deploy Infrastructure and Docker
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout del repositorio
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Verificar Docker
-      - name: Check Docker
-        run: |
-          if ! command -v docker &> /dev/null; then
-            echo "Docker no está instalado"
-            exit 1
-          fi
-          docker --version
+      # 2. Configurar Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-      # 3. Cache para Docker Buildx
+      # 3. Cache Docker layers
       - name: Cache Docker layers
         uses: actions/cache@v3
         with:
@@ -42,96 +36,71 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # 4. Configurar Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # 5. Instalar dependencias
-      - name: Install dependencies
-        run: |
-          sudo apt-get update || (sleep 10 && sudo apt-get update)
-          sudo apt-get install -y unzip
-
-      # 6. Configurar Terraform
+      # 4. Configurar Terraform
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: "1.9.8"
+          terraform_wrapper: false
 
-      # 7. Configurar SSH key
-      # 7. Configurar clave SSH
-      - name: Configure SSH key
+      # 5. Configurar SSH keys
+      - name: Configure SSH keys
         run: |
           mkdir -p ./keys
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
-          chmod 600 ./keys/serverxweb.pub
+          chmod 600 ./keys/serverxweb
           chmod 644 ./keys/serverxweb.pub
+          ssh-keygen -y -f ./keys/serverxweb > /dev/null
 
-      # 8. Inicializar Terraform    
+      # 6. Inicializar Terraform
       - name: Terraform Init
         run: |
           terraform init \
           -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
           -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
           -backend-config="region=us-east-1" \
+          -backend-config="endpoint=https://nyc3.digitaloceanspaces.com" \
           -backend-config="skip_credentials_validation=true" \
           -backend-config="skip_metadata_api_check=true" \
           -backend-config="skip_region_validation=true" \
           -backend-config="skip_requesting_account_id=true" \
-          -backend-config="use_path_style=true"
-        
+          -backend-config="skip_s3_checksum=true" \
+          -backend-config="force_path_style=true"
+
+      # 7. Verificar Variables
       - name: Verify Variables
         run: |
-            echo "Verificando SSH_KEY_ID..."
-            SSH_KEY_VALUE="${{ secrets.SSH_KEY_ID }}"
-              
-            # Verificar que no esté vacío
-              if [ -z "$SSH_KEY_VALUE" ]; then
-                echo "❌ Error: SSH_KEY_ID está vacío"
-                exit 1
-              fi
-              
-            # Verificar que sea numérico
-              if ! [[ "$SSH_KEY_VALUE" =~ ^[0-9]+$ ]]; then
-                echo "❌ Error: SSH_KEY_ID debe ser un número, valor actual: $SSH_KEY_VALUE"
-                exit 1
-              fi
-              
-              echo "✅ SSH_KEY_ID es válido"
+          if [ -z "${{ secrets.SSH_KEY_ID }}" ]; then
+            echo "Error: SSH_KEY_ID está vacío"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "Error: DOCKERHUB_USERNAME está vacío"
+            exit 1
+          fi
 
-      # 9. Terraform Plan
+      # 8. Plan Terraform
       - name: Terraform Plan
         run: |
           terraform plan \
-            -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-            -var="SSH_KEY_ID=$(echo ${{ secrets.SSH_KEY_ID }} | tr -d '"')" \
-            -var="PRIVATE_KEY_PATH=~/.ssh/serverxweb" \
-            -out=tfplan
+          -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
+          -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
+          -var="PRIVATE_KEY_PATH=./keys/serverxweb" \
+          -out=tfplan
 
-      
-      # 10. Terraform Apply
+      # 9. Apply Terraform
       - name: Terraform Apply
-        run: |
-          terraform apply -auto-approve tfplan || {
-            if [ -f "errored.tfstate" ]; then
-              echo "Intentando recuperar el estado..."
-              terraform state push errored.tfstate
-              terraform apply -auto-approve
-            else
-              exit 1
-            fi
-          }
+        run: terraform apply -auto-approve tfplan
 
-      
-      # 11. Login a Docker Hub
+      # 10. Login Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 12. Construir y publicar imagen Docker
+      # 11. Build y Push Docker Image
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -142,35 +111,84 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/backstore:${{ github.sha }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
+          build-args: |
+            NODE_ENV=production
 
-      # 13. Desplegar en Droplet
+      # 12. Deploy to Droplet
       - name: Deploy to Droplet
         run: |
           DROPLET_IP=$(terraform output -raw droplet_ip)
-          echo "Desplegando en $DROPLET_IP"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/serverxweb root@$DROPLET_IP << 'EOF'
+          echo "🚀 Iniciando despliegue en $DROPLET_IP"
+          
+          # Esperar a que el servidor esté listo
+          sleep 30
+          
+          ssh -o StrictHostKeyChecking=no -i ./keys/serverxweb root@$DROPLET_IP << 'EOF'
+            # Crear directorio de la aplicación si no existe
+            mkdir -p /var/www/app
             cd /var/www/app
+            
+            # Limpiar contenedores antiguos
+            docker system prune -f
+            
+            # Actualizar la imagen y reiniciar contenedor
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
             docker stop backend || true
             docker rm backend || true
+            
+            # Ejecutar nuevo contenedor
             docker run -d \
               --name backend \
+              --restart unless-stopped \
               -p 3000:3000 \
               -e NODE_ENV=production \
+              -v /var/www/app/data:/app/data \
               ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
+            
+            # Verificar que el contenedor está corriendo
+            if ! docker ps | grep backend; then
+              echo "Error: El contenedor no está ejecutándose"
+              exit 1
+            fi
           EOF
+
+      # 13. Verificar Despliegue
+      - name: Verify Deployment
+        run: |
+          DROPLET_IP=$(terraform output -raw droplet_ip)
+          max_attempts=10
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            if curl -s "http://$DROPLET_IP:3000/health" | grep -q "ok"; then
+              echo "✅ Aplicación desplegada correctamente"
+              exit 0
+            fi
+            echo "Intento $attempt de $max_attempts..."
+            sleep 10
+            attempt=$((attempt + 1))
+          done
+          echo "❌ Error: La aplicación no respondió después de $max_attempts intentos"
+          exit 1
 
       # 14. Notificaciones
       - name: Notify on success
         if: success()
-        run: echo "✅ Despliegue completado exitosamente"
+        run: |
+          echo "✅ Despliegue completado exitosamente"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "🔗 URL: http://$(terraform output -raw droplet_ip):3000"
 
       - name: Notify on failure
         if: failure()
-        run: echo "❌ El despliegue falló"
+        run: |
+          echo "❌ El despliegue falló"
+          echo "📝 Commit: ${{ github.sha }}"
 
-      # 15. Limpieza de cache
-      - name: Move cache
+      # 15. Limpieza
+      - name: Cleanup
+        if: always()
         run: |
           rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+          docker system prune -f || true
