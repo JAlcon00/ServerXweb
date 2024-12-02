@@ -52,6 +52,8 @@ jobs:
           chmod 600 ./keys/serverxweb
           chmod 644 ./keys/serverxweb.pub
           ssh-keygen -y -f ./keys/serverxweb > /dev/null
+          ls -la ./keys/
+          cat ./keys/serverxweb.pub
 
       # 6. Inicializar Terraform
       - name: Terraform Init
