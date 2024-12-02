@@ -64,7 +64,9 @@ jobs:
         run: |
           mkdir -p ./keys
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
           chmod 600 ./keys/serverxweb.pub
+          chmod 644 ./keys/serverxweb.pub
 
       # 8. Inicializar Terraform    
       - name: Terraform Init
