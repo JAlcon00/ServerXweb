@@ -5,6 +5,11 @@
 //6.- Descomento remote exect
 //xd
 
+provider "digitalocean" {
+  token = var.DIGITALOCEAN_TOKEN
+
+}
+
 terraform {
   required_providers {
     digitalocean = {
@@ -16,39 +21,41 @@ terraform {
   backend "s3" {
     endpoints = {
       s3 = "https://nyc3.digitaloceanspaces.com"
+
     }
     bucket                      = "devjesus2"
     key                         = "terraform.tfstate"
-    region                      = "nyc3"
+    skip_region_validation      = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
-    skip_region_validation      = true
     skip_requesting_account_id  = true
-    use_path_style              = true
+    skip_s3_checksum            = true
+    region                      = "us-east-1"
   }
 }
 
-provider "digitalocean" {
-  token = var.DIGITALOCEAN_TOKEN
+resource "digitalocean_project" "yisus-project" {
+  name        = "yisus-project2"
+  description = "yisus-project2"
+  resources   = [digitalocean_droplet.yisus-project-droplet.urn]
 }
 
-resource "digitalocean_droplet" "web_server" {
-  image      = "ubuntu-20-04-x64"
-  name       = "web-server-${formatdate("YYYYMMDDHHmmss", timestamp())}"
-  region     = "sfo3"
-  size       = "s-1vcpu-1gb"
-  ssh_keys   = [tonumber(var.SSH_KEY_ID)]
-  tags       = ["web", "production", "nodejs"]
-  monitoring = true
+
+resource "digitalocean_ssh_key" "serverxweb" {
+  name       = "serverxweb"
+  public_key = file("./keys/serverxweb.pub")
+}
+
+resource "digitalocean_droplet" "yisus-project-droplet" {
+  name     = "yisus-project-droplet"
+  size     = "s-2vcpu-4gb-120gb-intel"
+  image    = "ubuntu-20-04-x64"
+  region   = "sfo3"
+  ssh_keys = [digitalocean_ssh_key.serverxweb.id]
+  user_data = file("node-install.sh")
   //user_data = file(("node-install.sh"))
 
-  connection {
-    type        = "ssh"
-    user        = "root"
-    host        = self.ipv4_address
-    private_key = file(var.PRIVATE_KEY_PATH)
-    timeout     = "5m"
-  }
+
 
   /*
 
@@ -135,24 +142,34 @@ resource "digitalocean_droplet" "web_server" {
   ]
 }
 */
+  connection {
+    type        = "ssh"
+    user        = "root"
+    private_key = file("./keys/serverxweb")
+    host        = self.ipv4_address
+
+  }
+  provisioner "file" {
+    source      = "node-install.sh"
+    destination = "/root/node-install.sh"
+
+
+    connection {
+      type        = "ssh"
+      user        = "root"
+      private_key = file("./keys/serverxweb")
+      host        = self.ipv4_address
+
+    }
+  }
+}
+resource "time_sleep" "wait_node_install" {
+  depends_on = [digitalocean_droplet.yisus-project-droplet]
+  create_duration = "130s"
+  
 }
 
 output "droplet_ip" {
-  value       = digitalocean_droplet.web_server.ipv4_address
+  value       = digitalocean_droplet.yisus-project-droplet.ipv4_address
   description = "IP pública del servidor"
-}
-
-output "droplet_status" {
-  value       = digitalocean_droplet.web_server.status
-  description = "Estado del Droplet"
-}
-
-output "ssh_command" {
-  value       = "ssh -i ${var.PRIVATE_KEY_PATH} root@${digitalocean_droplet.web_server.ipv4_address}"
-  description = "Comando SSH"
-}
-
-output "install_logs" {
-  value       = "tail -f /var/log/cloud-init-output.log"
-  description = "Comando para ver logs de instalación"
 }
