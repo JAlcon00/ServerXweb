@@ -31,6 +31,7 @@ terraform {
     skip_requesting_account_id  = true
     skip_s3_checksum            = true
     region                      = "us-east-1"
+    user_path_style             = true
   }
 }
 
