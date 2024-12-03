@@ -68,7 +68,15 @@ jobs:
           TF_LOG: DEBUG
 
       - name: Terraform Format
-        run: terraform fmt -check
+        run: |
+         echo "Formateando archivos de Terraform..."
+          terraform fmt
+          if [ $? -eq 0 ]; then
+            echo "Archivos formateados correctamente"
+          else
+            echo "Error al formatear archivos"
+            exit 1
+          fi
 
       - name: Terraform Validate
         run: |
