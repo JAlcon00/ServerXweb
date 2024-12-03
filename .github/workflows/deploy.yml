@@ -1,5 +1,5 @@
 name: Deploy Infrastructure
-#XD
+
 on:
   workflow_dispatch:
   push:
@@ -10,24 +10,22 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-  #TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
+  TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout
       - name: Clone repository
         uses: actions/checkout@v4
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.8
           terraform_wrapper: false 
-        
 
-      # 5. Configurar SSH keys
       - name: Configure SSH keys
         run: |
           mkdir -p ./keys
@@ -37,11 +35,9 @@ jobs:
           chmod 644 ./keys/serverxweb.pub
           ls -l ./keys/
           cat ./keys/serverxweb.pub
-  
-      # 6. Inicializar Terraform
+
       - name: Terraform Init
         run: terraform init 
-
 
       - name: Terraform format
         run: terraform fmt
@@ -54,3 +50,17 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
+
+      - name: Get Droplet IP
+        id: get-droplet-ip
+        run: echo "::set-output name=droplet_ip::$(terraform output -raw droplet_ip)"
+
+      - name: Connect to Droplet via SSH and run commands
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ steps.get-droplet-ip.outputs.droplet_ip }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "Conexión SSH exitosa"
+            # Aquí puedes agregar los comandos que necesitas ejecutar en el droplet
