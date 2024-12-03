@@ -30,28 +30,44 @@ jobs:
 
       - name: Configure SSH keys
         run: |
+          # Crear directorio
           mkdir -p ./keys
-          # Guardar las claves con echo -e para preservar formato
-          echo -e "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
-          echo -e "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
           
-          # Establecer permisos correctos
-          chmod 600 ./keys/serverxweb
-          chmod 644 ./keys/serverxweb.pub
-          
-          # Verificar contenido y formato
-          echo "Verificando clave pública:"
-          if ! ssh-keygen -lf ./keys/serverxweb.pub; then
-            echo "Error: Formato de clave pública inválido"
+          # Debug: Verificar que el secreto no esté vacío
+          if [ -z "${{ secrets.SSH_PUBLIC_KEY }}" ]; then
+            echo "Error: SSH_PUBLIC_KEY está vacío"
             exit 1
           fi
           
-          # Mostrar primeros caracteres de la clave (seguro)
-          echo "Primeros caracteres de la clave pública:"
+          # Guardar la clave pública asegurando que termine en nueva línea
+          echo -n "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
+          echo "" >> ./keys/serverxweb.pub
+          
+          # Guardar la clave privada
+          echo -n "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
+          echo "" >> ./keys/serverxweb
+          
+          # Establecer permisos
+          chmod 600 ./keys/serverxweb
+          chmod 644 ./keys/serverxweb.pub
+          
+          # Debug: Mostrar contenido de la clave pública (primeros caracteres)
+          echo "Contenido inicial de la clave pública:"
           head -c 50 ./keys/serverxweb.pub
           
-          echo "Tamaño del archivo de clave pública:"
-          ls -l ./keys/serverxweb.pub
+          # Debug: Verificar formato
+          if ! grep -q "^ssh-rsa" ./keys/serverxweb.pub; then
+            echo "Error: La clave pública no comienza con ssh-rsa"
+            exit 1
+          fi
+          
+          # Verificar que sea una clave válida
+          if ! ssh-keygen -lf ./keys/serverxweb.pub; then
+            echo "Error: Formato de clave pública inválido"
+            echo "Contenido completo del archivo:"
+            cat ./keys/serverxweb.pub
+            exit 1
+          fi
 
       - name: Verify SSH keys exist
         run: |
