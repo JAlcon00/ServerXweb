@@ -3,45 +3,29 @@ name: Deploy Infrastructure
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: 
+      - main
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
   TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-  TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
+  #TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
-  DOCKER_BUILDKIT: 1
 
 jobs:
-  terraform:
-    name: Deploy Infrastructure and Docker
+  terraform-apply:
     runs-on: ubuntu-latest
-
     steps:
       # 1. Checkout
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      # 2. Configurar Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # 3. Cache Docker layers
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      # 4. Configurar Terraform
-      - name: Set up Terraform
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: "1.9.8"
-          terraform_wrapper: false
+          terraform_version: 1.9.8
+          terraform_wrapper: false 
+        
 
       # 5. Configurar SSH keys
       - name: Configure SSH keys
@@ -49,148 +33,22 @@ jobs:
           mkdir -p ./keys
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
-          chmod 600 ./keys/serverxweb
-          chmod 644 ./keys/serverxweb.pub
-          ssh-keygen -y -f ./keys/serverxweb > /dev/null
-          ls -la ./keys/
-          cat ./keys/serverxweb.pub
-
+          chmod 777 ./keys/serverxweb
+          chmod 777 ./keys/serverxweb.pub
+  
       # 6. Inicializar Terraform
       - name: Terraform Init
-        run: |
-          terraform init \
-          -backend-config="access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-          -backend-config="secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
-          -backend-config="region=us-east-1" \
-          -backend-config="endpoints={\"s3\":\"https://nyc3.digitaloceanspaces.com\"}" \
-          -backend-config="skip_credentials_validation=true" \
-          -backend-config="skip_metadata_api_check=true" \
-          -backend-config="skip_region_validation=true" \
-          -backend-config="skip_requesting_account_id=true" \
-          -backend-config="skip_s3_checksum=true" \
-          -backend-config="force_path_style=true"
+        run: terraform init 
 
-      # 7. Verificar Variables
-      - name: Verify Variables
-        run: |
-          if [ -z "${{ secrets.SSH_KEY_ID }}" ]; then
-            echo "Error: SSH_KEY_ID está vacío"
-            exit 1
-          fi
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
-            echo "Error: DOCKERHUB_USERNAME está vacío"
-            exit 1
-          fi
 
-      # 8. Plan Terraform
+      - name: Terraform format
+        run: terraform fmt
+
+      - name: Terraform Validate
+        run: terraform validate
+
       - name: Terraform Plan
-        run: |
-          terraform plan \
-          -var="DIGITALOCEAN_TOKEN=${{ secrets.DIGITALOCEAN_TOKEN }}" \
-          -var="SSH_KEY_ID=${{ secrets.SSH_KEY_ID }}" \
-          -var="PRIVATE_KEY_PATH=./keys/serverxweb" \
-          -out=tfplan
+        run: terraform plan
 
-      # 9. Apply Terraform
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-
-      # 10. Login Docker Hub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # 11. Build y Push Docker Image
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/backstore:${{ github.sha }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
-          build-args: |
-            NODE_ENV=production
-
-      # 12. Deploy to Droplet
-      - name: Deploy to Droplet
-        run: |
-          DROPLET_IP=$(terraform output -raw droplet_ip)
-          echo "🚀 Iniciando despliegue en $DROPLET_IP"
-          
-          # Esperar a que el servidor esté listo
-          sleep 30
-          
-          ssh -o StrictHostKeyChecking=no -i ./keys/serverxweb root@$DROPLET_IP << 'EOF'
-            # Crear directorio de la aplicación si no existe
-            mkdir -p /var/www/app
-            cd /var/www/app
-            
-            # Limpiar contenedores antiguos
-            docker system prune -f
-            
-            # Actualizar la imagen y reiniciar contenedor
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
-            docker stop backend || true
-            docker rm backend || true
-            
-            # Ejecutar nuevo contenedor
-            docker run -d \
-              --name backend \
-              --restart unless-stopped \
-              -p 3000:3000 \
-              -e NODE_ENV=production \
-              -v /var/www/app/data:/app/data \
-              ${{ secrets.DOCKERHUB_USERNAME }}/backstore:latest
-            
-            # Verificar que el contenedor está corriendo
-            if ! docker ps | grep backend; then
-              echo "Error: El contenedor no está ejecutándose"
-              exit 1
-            fi
-          EOF
-
-      # 13. Verificar Despliegue
-      - name: Verify Deployment
-        run: |
-          DROPLET_IP=$(terraform output -raw droplet_ip)
-          max_attempts=10
-          attempt=1
-          
-          while [ $attempt -le $max_attempts ]; do
-            if curl -s "http://$DROPLET_IP:3000/health" | grep -q "ok"; then
-              echo "✅ Aplicación desplegada correctamente"
-              exit 0
-            fi
-            echo "Intento $attempt de $max_attempts..."
-            sleep 10
-            attempt=$((attempt + 1))
-          done
-          echo "❌ Error: La aplicación no respondió después de $max_attempts intentos"
-          exit 1
-
-      # 14. Notificaciones
-      - name: Notify on success
-        if: success()
-        run: |
-          echo "✅ Despliegue completado exitosamente"
-          echo "📝 Commit: ${{ github.sha }}"
-          echo "🔗 URL: http://$(terraform output -raw droplet_ip):3000"
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ El despliegue falló"
-          echo "📝 Commit: ${{ github.sha }}"
-
-      # 15. Limpieza
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
-          docker system prune -f || true
+        run: terraform apply -auto-approve
