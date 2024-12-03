@@ -41,7 +41,7 @@ resource "digitalocean_ssh_key" "serverxweb" {
     create_before_destroy = true
   }
 }
-
+# XD
 # Luego crea el droplet
 resource "digitalocean_droplet" "yisus-project-droplet" {
   name      = "yisus-project-droplet"
