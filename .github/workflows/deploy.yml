@@ -87,7 +87,7 @@ jobs:
           DROPLET_IP=$(terraform output -raw droplet_ip)
           echo "droplet_ip=${DROPLET_IP}" >> $GITHUB_OUTPUT
           
-          for i in {1..20}; do  # Aumentando los intentos a 20
+          for i in {1..12}; do
             if nc -z -w5 $DROPLET_IP 22; then
               echo "Puerto SSH disponible"
               sleep 15
@@ -96,6 +96,13 @@ jobs:
             echo "Intento $i: Esperando puerto SSH..."
             sleep 15
           done
+
+      - name: Clean up previous node-install.sh directory (if exists)
+        run: |
+          if [ -d /tmp/node-install.sh ]; then
+            echo "Eliminando directorio existente /tmp/node-install.sh"
+            rm -rf /tmp/node-install.sh
+          fi
 
       - name: Copy node-install.sh to server
         uses: appleboy/scp-action@v0.1.0
@@ -113,16 +120,20 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            # Verificar que no sea un directorio ni un archivo vacío
             if [ -d /tmp/node-install.sh ]; then
               echo "/tmp/node-install.sh es un directorio, no se puede ejecutar como script."
               exit 1
             elif [ ! -f /tmp/node-install.sh ]; then
               echo "/tmp/node-install.sh no es un archivo válido."
               exit 1
+            elif [ ! -s /tmp/node-install.sh ]; then
+              echo "/tmp/node-install.sh está vacío."
+              exit 1
             fi
             ls -l /tmp/node-install.sh  # Verifica el archivo y sus permisos
 
-      - name: Run node-install.sh on server
+      - name: Run node-install.sh
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ steps.wait-droplet.outputs.droplet_ip }}
