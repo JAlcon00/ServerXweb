@@ -5,6 +5,10 @@ on:
   push:
     branches: 
       - main
+    paths:
+      - '**.tf'
+      - '**.sh'
+      - '.github/workflows/**'
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
@@ -14,181 +18,120 @@ env:
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  TF_LOG: DEBUG
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.8
           terraform_wrapper: false
-      # XD
+
       - name: Configure SSH keys
+        id: ssh-config
         run: |
-          # Crear directorio
-          mkdir -p ./keys
+          mkdir -p ./keys ~/.ssh
           
-          # Debug: Verificar que el secreto no esté vacío
-          if [ -z "${{ secrets.SSH_PUBLIC_KEY }}" ]; then
-            echo "Error: SSH_PUBLIC_KEY está vacío"
-            exit 1
-          fi
+          # Validar secretos
+          for secret in "SSH_PUBLIC_KEY" "SSH_PRIVATE_KEY"; do
+            if [ -z "${{ secrets[secret] }}" ]; then
+              echo "Error: $secret está vacío"
+              exit 1
+            fi
+          done
           
-          # Guardar la clave pública asegurando que termine en nueva línea
+          # Configurar claves SSH
           echo -n "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
-          echo "" >> ./keys/serverxweb.pub
-          
-          # Guardar la clave privada
           echo -n "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
-          echo "" >> ./keys/serverxweb
-          
-          # Establecer permisos
           chmod 600 ./keys/serverxweb
           chmod 644 ./keys/serverxweb.pub
           
-          # Debug: Mostrar contenido de la clave pública (primeros caracteres)
-          echo "Contenido inicial de la clave pública:"
-          head -c 50 ./keys/serverxweb.pub
-          
-          # Debug: Verificar formato
-          if ! grep -q "^ssh-rsa" ./keys/serverxweb.pub; then
-            echo "Error: La clave pública no comienza con ssh-rsa"
-            exit 1
-          fi
-          
-          # Verificar que sea una clave válida
-          if ! ssh-keygen -lf ./keys/serverxweb.pub; then
-            echo "Error: Formato de clave pública inválido"
-            echo "Contenido completo del archivo:"
-            cat ./keys/serverxweb.pub
-            exit 1
-          fi
-
-      - name: Verify SSH keys exist
-        run: |
-          if [ ! -s ./keys/serverxweb.pub ]; then
-            echo "Error: La clave pública está vacía"
-            echo "Contenido del directorio keys:"
-            ls -la ./keys/
-            exit 1
-          fi
-          
-          if ! grep -q "ssh-rsa" ./keys/serverxweb.pub; then
-            echo "Error: La clave pública no parece tener el formato correcto"
-            exit 1
-          fi
-
-      - name: Setup SSH config
-        run: |
-          mkdir -p ~/.ssh
+          # Configurar SSH
           echo "Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
           " > ~/.ssh/config
-
-      - name: Terraform Init
-        run: |
-          echo "Iniciando Terraform..."
-          terraform init
-        env:
-          TF_LOG: DEBUG
-
-      - name: Terraform Format
-        run: |
-         echo "Formateando archivos de Terraform..."
-          terraform fmt
-          if [ $? -eq 0 ]; then
-            echo "Archivos formateados correctamente"
-          else
-            echo "Error al formatear archivos"
+          
+          # Validar clave pública
+          if ! ssh-keygen -lf ./keys/serverxweb.pub; then
+            echo "Error: Clave pública inválida"
             exit 1
           fi
 
-      - name: Terraform Validate
+      - name: Terraform Init & Plan
+        id: tf-plan
         run: |
-          echo "Validando configuración de Terraform..."
+          terraform init
+          terraform fmt -check
           terraform validate
-
-      - name: Terraform Plan
-        run: |
-          echo "Generando plan de Terraform..."
           terraform plan -out=tfplan
-        env:
-          TF_LOG: DEBUG
 
       - name: Terraform Apply
-        run: |
-          echo "Aplicando configuración de Terraform..."
-          terraform apply -auto-approve tfplan
-        env:
-          TF_LOG: DEBUG
+        id: tf-apply
+        run: terraform apply -auto-approve tfplan
 
-      - name: Wait for Droplet
-        run: |
-          echo "Esperando 60 segundos para que el Droplet se inicialice completamente..."
-          sleep 60
-
-      - name: Get Droplet IP
-        id: droplet-ip
+      - name: Wait for Droplet Configuration
+        id: wait-droplet
         run: |
           DROPLET_IP=$(terraform output -raw droplet_ip)
           echo "droplet_ip=${DROPLET_IP}" >> $GITHUB_OUTPUT
-          echo "IP del Droplet: ${DROPLET_IP}"
+          
+          echo "Esperando inicialización del Droplet..."
+          for i in {1..12}; do
+            if nc -z -w5 $DROPLET_IP 22; then
+              echo "Puerto SSH disponible"
+              sleep 15  # Esperar un poco más para que los servicios estén listos
+              break
+            fi
+            echo "Intento $i: Puerto SSH no disponible, esperando..."
+            sleep 15
+          done
 
-      - name: Test SSH Connection
+      - name: Install and Verify Dependencies
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
+          host: ${{ steps.wait-droplet.outputs.droplet_ip }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Conexión SSH exitosa"
-            echo "Verificando sistema..."
-            uname -a
-            echo "Verificando instalación de Node.js..."
-            node --version
-            npm --version
-            echo "Verificando instalación de PM2..."
-            pm2 --version
+            set -e
+            if [ -f /root/node-install.sh ]; then
+              chmod +x /root/node-install.sh
+              /root/node-install.sh
+            else
+              echo "Error: node-install.sh no encontrado"
+              exit 1
+            fi
+            
+            # Verificar instalaciones
+            command -v node >/dev/null 2>&1 || { echo "Node.js no instalado"; exit 1; }
+            command -v npm >/dev/null 2>&1 || { echo "npm no instalado"; exit 1; }
+            command -v pm2 >/dev/null 2>&1 || { echo "PM2 no instalado"; exit 1; }
 
-      - name: Deploy Application
+      - name: Deploy and Verify Application
+        if: success()
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
+          host: ${{ steps.wait-droplet.outputs.droplet_ip }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "Iniciando despliegue de la aplicación..."
+            set -e
             cd /var/www/app
-            echo "Limpiando directorio..."
-            rm -rf *
-            echo "Clonando repositorio..."
-            git clone https://github.com/${{ github.repository }} .
-            echo "Instalando dependencias..."
-            npm install
-            echo "Configurando variables de entorno..."
-            echo "${{ secrets.ENV_FILE }}" > .env
-            echo "Iniciando aplicación con PM2..."
-            pm2 start src/server.js --name "backstore"
+            pm2 reload backstore 2>/dev/null || pm2 start src/server.js --name backstore
             pm2 save
-
-      - name: Verify Deployment
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "Verificando estado de la aplicación..."
-            pm2 list
-            pm2 logs backstore --lines 10
-
-      - name: Output Success
-        run: |
-          echo "Despliegue completado exitosamente"
-          echo "IP del servidor: ${{ steps.droplet-ip.outputs.droplet_ip }}"
+            
+            # Verificar que la aplicación está corriendo
+            if ! pm2 list | grep -q "online.*backstore"; then
+              echo "Error: La aplicación no está en ejecución"
+              pm2 logs backstore --lines 20
+              exit 1
+            fi
