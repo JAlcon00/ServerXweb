@@ -133,15 +133,14 @@ jobs:
             fi
             ls -l /tmp/node-install.sh  # Verifica el archivo y sus permisos
 
-      - name: Run node-install.sh
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ steps.wait-droplet.outputs.droplet_ip }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            chmod +x /tmp/node-install.sh
-            /tmp/node-install.sh
+      - name: Make node-install.sh executable
+        run: |
+          chmod +x /tmp/node-install.sh
+          
+      - name: Run node-install.sh script
+        run: |
+          /tmp/node-install.sh
+        shell: bash
 
       - name: Verify Node.js Installation
         uses: appleboy/ssh-action@v0.1.10
@@ -195,3 +194,4 @@ jobs:
         run: |
           echo "Despliegue completado exitosamente"
           echo "IP del servidor: ${{ steps.wait-droplet.outputs.droplet_ip }}"
+
