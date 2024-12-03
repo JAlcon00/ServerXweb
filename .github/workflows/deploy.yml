@@ -87,7 +87,7 @@ jobs:
           DROPLET_IP=$(terraform output -raw droplet_ip)
           echo "droplet_ip=${DROPLET_IP}" >> $GITHUB_OUTPUT
           
-          for i in {1..12}; do
+          for i in {1..20}; do  # Aumentando los intentos a 20
             if nc -z -w5 $DROPLET_IP 22; then
               echo "Puerto SSH disponible"
               sleep 15
@@ -96,6 +96,25 @@ jobs:
             echo "Intento $i: Esperando puerto SSH..."
             sleep 15
           done
+
+      - name: Copy node-install.sh to server
+        uses: appleboy/scp-action@v0.1.0
+        with:
+          host: ${{ steps.wait-droplet.outputs.droplet_ip }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "node-install.sh"
+          target: "/tmp/node-install.sh"
+
+      - name: Run node-install.sh on server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ steps.wait-droplet.outputs.droplet_ip }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod +x /tmp/node-install.sh
+            /tmp/node-install.sh
 
       - name: Verify Node.js Installation
         uses: appleboy/ssh-action@v0.1.10
