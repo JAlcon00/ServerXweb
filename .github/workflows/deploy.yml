@@ -12,6 +12,8 @@ env:
   TF_VAR_DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
   TF_VAR_PRIVATE_KEY_PATH: "./keys/serverxweb"
   TF_VAR_SSH_KEY_ID: ${{ secrets.SSH_KEY_ID }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
   terraform-apply:
@@ -24,7 +26,7 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.8
-          terraform_wrapper: false 
+          terraform_wrapper: false
 
       - name: Configure SSH keys
         run: |
@@ -33,34 +35,121 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
           chmod 600 ./keys/serverxweb
           chmod 644 ./keys/serverxweb.pub
-          ls -l ./keys/
+          ls -la ./keys/
+          echo "Contenido de la clave pública:"
           cat ./keys/serverxweb.pub
+          echo "Verificando permisos de las claves:"
+          ls -l ./keys/
+
+      - name: Verify SSH keys exist
+        run: |
+          if [ ! -s ./keys/serverxweb.pub ]; then
+            echo "Error: La clave pública está vacía"
+            exit 1
+          fi
+          if [ ! -s ./keys/serverxweb ]; then
+            echo "Error: La clave privada está vacía"
+            exit 1
+          fi
+
+      - name: Setup SSH config
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          " > ~/.ssh/config
 
       - name: Terraform Init
-        run: terraform init 
+        run: |
+          echo "Iniciando Terraform..."
+          terraform init
+        env:
+          TF_LOG: DEBUG
 
-      - name: Terraform format
-        run: terraform fmt
+      - name: Terraform Format
+        run: terraform fmt -check
 
       - name: Terraform Validate
-        run: terraform validate
+        run: |
+          echo "Validando configuración de Terraform..."
+          terraform validate
 
       - name: Terraform Plan
-        run: terraform plan
+        run: |
+          echo "Generando plan de Terraform..."
+          terraform plan -out=tfplan
+        env:
+          TF_LOG: DEBUG
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: |
+          echo "Aplicando configuración de Terraform..."
+          terraform apply -auto-approve tfplan
+        env:
+          TF_LOG: DEBUG
+
+      - name: Wait for Droplet
+        run: |
+          echo "Esperando 60 segundos para que el Droplet se inicialice completamente..."
+          sleep 60
 
       - name: Get Droplet IP
-        id: get-droplet-ip
-        run: echo "::set-output name=droplet_ip::$(terraform output -raw droplet_ip)"
+        id: droplet-ip
+        run: |
+          DROPLET_IP=$(terraform output -raw droplet_ip)
+          echo "droplet_ip=${DROPLET_IP}" >> $GITHUB_OUTPUT
+          echo "IP del Droplet: ${DROPLET_IP}"
 
-      - name: Connect to Droplet via SSH and run commands
-        uses: appleboy/ssh-action@v0.1.5
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ steps.get-droplet-ip.outputs.droplet_ip }}
+          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "Conexión SSH exitosa"
-            # Aquí puedes agregar los comandos que necesitas ejecutar en el droplet
+            echo "Verificando sistema..."
+            uname -a
+            echo "Verificando instalación de Node.js..."
+            node --version
+            npm --version
+            echo "Verificando instalación de PM2..."
+            pm2 --version
+
+      - name: Deploy Application
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "Iniciando despliegue de la aplicación..."
+            cd /var/www/app
+            echo "Limpiando directorio..."
+            rm -rf *
+            echo "Clonando repositorio..."
+            git clone https://github.com/${{ github.repository }} .
+            echo "Instalando dependencias..."
+            npm install
+            echo "Configurando variables de entorno..."
+            echo "${{ secrets.ENV_FILE }}" > .env
+            echo "Iniciando aplicación con PM2..."
+            pm2 start src/server.js --name "backstore"
+            pm2 save
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ steps.droplet-ip.outputs.droplet_ip }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "Verificando estado de la aplicación..."
+            pm2 list
+            pm2 logs backstore --lines 10
+
+      - name: Output Success
+        run: |
+          echo "Despliegue completado exitosamente"
+          echo "IP del servidor: ${{ steps.droplet-ip.outputs.droplet_ip }}"
