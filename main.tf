@@ -41,7 +41,7 @@ resource "digitalocean_project" "yisus-project2" {
   resources   = [digitalocean_droplet.yisus-project-droplet.urn]
 }
 
-
+//xd
 resource "digitalocean_ssh_key" "serverxweb" {
   name       = "serverxweb"
   public_key = file("./keys/serverxweb.pub")
