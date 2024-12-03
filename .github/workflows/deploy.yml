@@ -27,53 +27,104 @@ jobs:
         with:
           terraform_version: 1.9.8
           terraform_wrapper: false
-
-      - name: Clean Terraform State
-        run: |
-          rm -f .terraform/terraform.tfstate*
-          rm -f terraform.tfstate*
-          rm -rf .terraform
-
+      # XD
       - name: Configure SSH keys
         run: |
+          # Crear directorio
           mkdir -p ./keys
+          
+          # Debug: Verificar que el secreto no esté vacío
           if [ -z "${{ secrets.SSH_PUBLIC_KEY }}" ]; then
             echo "Error: SSH_PUBLIC_KEY está vacío"
             exit 1
           fi
+          
+          # Guardar la clave pública asegurando que termine en nueva línea
           echo -n "${{ secrets.SSH_PUBLIC_KEY }}" > ./keys/serverxweb.pub
           echo "" >> ./keys/serverxweb.pub
+          
+          # Guardar la clave privada
           echo -n "${{ secrets.SSH_PRIVATE_KEY }}" > ./keys/serverxweb
           echo "" >> ./keys/serverxweb
+          
+          # Establecer permisos
           chmod 600 ./keys/serverxweb
           chmod 644 ./keys/serverxweb.pub
+          
+          # Debug: Mostrar contenido de la clave pública (primeros caracteres)
+          echo "Contenido inicial de la clave pública:"
+          head -c 50 ./keys/serverxweb.pub
+          
+          # Debug: Verificar formato
+          if ! grep -q "^ssh-rsa" ./keys/serverxweb.pub; then
+            echo "Error: La clave pública no comienza con ssh-rsa"
+            exit 1
+          fi
+          
+          # Verificar que sea una clave válida
+          if ! ssh-keygen -lf ./keys/serverxweb.pub; then
+            echo "Error: Formato de clave pública inválido"
+            echo "Contenido completo del archivo:"
+            cat ./keys/serverxweb.pub
+            exit 1
+          fi
+
+      - name: Verify SSH keys exist
+        run: |
+          if [ ! -s ./keys/serverxweb.pub ]; then
+            echo "Error: La clave pública está vacía"
+            echo "Contenido del directorio keys:"
+            ls -la ./keys/
+            exit 1
+          fi
+          
+          if ! grep -q "ssh-rsa" ./keys/serverxweb.pub; then
+            echo "Error: La clave pública no parece tener el formato correcto"
+            exit 1
+          fi
+
+      - name: Setup SSH config
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          " > ~/.ssh/config
 
       - name: Terraform Init
         run: |
           echo "Iniciando Terraform..."
-          terraform init -reconfigure
+          terraform init
         env:
           TF_LOG: DEBUG
+
+      - name: Terraform Format
+        run: |
+         echo "Formateando archivos de Terraform..."
+          terraform fmt
+          if [ $? -eq 0 ]; then
+            echo "Archivos formateados correctamente"
+          else
+            echo "Error al formatear archivos"
+            exit 1
+          fi
+
+      - name: Terraform Validate
+        run: |
+          echo "Validando configuración de Terraform..."
+          terraform validate
 
       - name: Terraform Plan
         run: |
           echo "Generando plan de Terraform..."
-          terraform plan -out=tfplan || (
-            echo "Error en Plan. Intentando limpiar recursos..."
-            terraform destroy -auto-approve
-            exit 1
-          )
+          terraform plan -out=tfplan
         env:
           TF_LOG: DEBUG
 
       - name: Terraform Apply
         run: |
           echo "Aplicando configuración de Terraform..."
-          terraform apply -auto-approve tfplan || (
-            echo "Error en Apply. Limpiando recursos..."
-            terraform destroy -auto-approve
-            exit 1
-          )
+          terraform apply -auto-approve tfplan
         env:
           TF_LOG: DEBUG
 
@@ -121,11 +172,19 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # Asegurarse de que Node.js está instalado
-            if ! command -v node &> /dev/null; then
-              echo "Error: Node.js no está instalado"
-              exit 1
-            fi
+            echo "Iniciando despliegue de la aplicación..."
+            cd /var/www/app
+            echo "Limpiando directorio..."
+            rm -rf *
+            echo "Clonando repositorio..."
+            git clone https://github.com/${{ github.repository }} .
+            echo "Instalando dependencias..."
+            npm install
+            echo "Configurando variables de entorno..."
+            echo "${{ secrets.ENV_FILE }}" > .env
+            echo "Iniciando aplicación con PM2..."
+            pm2 start src/server.js --name "backstore"
+            pm2 save
 
       - name: Verify Deployment
         uses: appleboy/ssh-action@v0.1.10
